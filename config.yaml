@@ -1,0 +1,25 @@
+listen: 127.0.0.1:53
+api_listen: 127.0.0.1:5380
+use_tls: true
+log_queries: false
+dns_rebinding_protection: true
+dnssec: true
+upstream:
+    - 1.1.1.1:853
+cache:
+    enabled: true
+    max_size: 10000
+    min_ttl: 60
+    stale_while_revalidate: true
+rate_limit:
+    enabled: false
+    max_rps: 10
+    burst_multiplier: 3
+    whitelist_ips: []
+    per_domain_max_rps: 0
+blocklist:
+    enabled: false
+    files: []
+    domains: []
+hosts:
+    myapp.local: 127.0.0.1
