@@ -33,3 +33,7 @@ export function IsDNSRunning() {
 export function OpenFileDialog(arg1, arg2) {
   return window['go']['main']['App']['OpenFileDialog'](arg1, arg2);
 }
+
+export function SystemDNSStatus() {
+  return window['go']['main']['App']['SystemDNSStatus']();
+}

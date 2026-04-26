@@ -42,6 +42,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.cfgPath = a.resolveConfigPath()
 	log.Printf("[selfdns-app] v%s starting as administrator, config: %s", appVersion, a.cfgPath)
+	a.setSystemDNS()
 	go a.startDNS()
 }
 
@@ -52,14 +53,37 @@ func (a *App) isAdmin() bool {
 
 func (a *App) shutdown(_ context.Context) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if a.apiServer != nil {
 		a.apiServer.Stop()
 	}
 	if a.dnsServer != nil {
 		a.dnsServer.Stop()
 	}
+	a.mu.Unlock()
+	a.restoreSystemDNS()
 	log.Println("[selfdns-app] shutdown complete")
+}
+
+func (a *App) setSystemDNS() {
+	_ = exec.Command("powershell", "-Command",
+		"Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | "+
+			"ForEach-Object { Set-DnsClientServerAddress -InterfaceAlias $_.Name -ServerAddresses '127.0.0.1' }",
+	).Run()
+	_ = exec.Command("ipconfig", "/flushdns").Run()
+	log.Println("[selfdns-app] DNS: set 127.0.0.1 on all active adapters")
+}
+
+func (a *App) restoreSystemDNS() {
+	_ = exec.Command("powershell", "-Command",
+		"Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | "+
+			"ForEach-Object { Set-DnsClientServerAddress -InterfaceAlias $_.Name -ResetServerAddresses }",
+	).Run()
+	_ = exec.Command("ipconfig", "/flushdns").Run()
+	log.Println("[selfdns-app] DNS: reset adapters to DHCP DNS")
+}
+
+func (a *App) SystemDNSStatus() map[string]any {
+	return map[string]any{"active": true}
 }
 
 func (a *App) startDNS() {
@@ -80,6 +104,8 @@ func (a *App) startDNS() {
 		return
 	}
 
+	srv.SetCADir(filepath.Dir(a.cfgPath))
+
 	if err := srv.Start(); err != nil {
 		a.setStartErr(fmt.Sprintf(
 			"DNS server failed to bind %s: %v\n\nTip: port 53 requires Administrator. Right-click the app and choose \"Run as administrator\".",
@@ -91,6 +117,8 @@ func (a *App) startDNS() {
 	a.mu.Lock()
 	a.dnsServer = srv
 	a.mu.Unlock()
+
+	go a.installBlockPageCA()
 
 	log.Printf("[selfdns-app] DNS ready on %s (UDP+TCP)", cfg.Listen)
 
@@ -158,6 +186,40 @@ func (a *App) OpenFileDialog(title string, filters []wailsruntime.FileFilter) st
 
 func (a *App) FixConfigPermissions(_ string) string {
 	return "ok"
+}
+
+func (a *App) installBlockPageCA() {
+	a.mu.Lock()
+	srv := a.dnsServer
+	a.mu.Unlock()
+	if srv == nil {
+		return
+	}
+	cert := srv.BlockPageCACert()
+	if len(cert) == 0 {
+		return
+	}
+
+	tmp, err := os.CreateTemp("", "selfdns-ca-*.pem")
+	if err != nil {
+		log.Printf("[selfdns-app] CA install: create temp file: %v", err)
+		return
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(cert); err != nil {
+		tmp.Close()
+		return
+	}
+	tmp.Close()
+
+	if err := exec.Command("powershell", "-Command",
+		fmt.Sprintf("Import-Certificate -FilePath '%s' -CertStoreLocation Cert:\\LocalMachine\\Root", tmpName),
+	).Run(); err != nil {
+		log.Printf("[selfdns-app] CA install: Windows cert store: %v", err)
+	} else {
+		log.Println("[selfdns-app] CA: installed in Windows LocalMachine Root")
+	}
 }
 
 func (a *App) resolveConfigPath() string {

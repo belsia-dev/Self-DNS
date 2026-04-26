@@ -11,13 +11,26 @@ import logoImg from './assets/logo.png'
 
 const API_BASE = 'http://127.0.0.1:5380/api'
 
+async function readJSON(response) {
+  const text = await response.text()
+  if (!text) return null
+  try { return JSON.parse(text) } catch { return null }
+}
+
+async function request(path, options) {
+  const response = await fetch(`${API_BASE}${path}`, options)
+  const data = await readJSON(response)
+  if (!response.ok) throw new Error(data?.error || response.statusText)
+  return data
+}
+
 export const api = {
-  get: path => fetch(`${API_BASE}${path}`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json() }),
-  post: (path, body) => fetch(`${API_BASE}${path}`, {
+  get: path => request(path),
+  post: (path, body) => request(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json() }),
+  }),
 }
 
 const PAGES = {
@@ -29,6 +42,15 @@ const PAGES = {
   settings:  Settings,
 }
 
+const KEY_MAP = {
+  '1': 'dashboard',
+  '2': 'querylog',
+  '3': 'blocklist',
+  '4': 'hosts',
+  '5': 'security',
+  '6': 'settings',
+}
+
 export default function App() {
   const [page, setPage]       = useState('dashboard')
   const [running, setRunning] = useState(false)
@@ -37,7 +59,6 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true
-
     const poll = async () => {
       try {
         const s = await api.get('/status')
@@ -56,65 +77,87 @@ export default function App() {
         }
       }
     }
-
     poll()
     const id = setInterval(poll, 2000)
     return () => { mounted = false; clearInterval(id) }
   }, [])
 
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
+      const next = KEY_MAP[e.key]
+      if (next) { e.preventDefault(); setPage(next) }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   const Page = PAGES[page] ?? Dashboard
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden text-gray-100">
+    <div className="flex h-screen bg-ink-50 overflow-hidden text-text-primary">
       <div className="titlebar-drag pointer-events-none absolute inset-x-0 top-0 h-8 z-50" />
 
       <Sidebar current={page} onNavigate={setPage} running={running} ready={ready} />
 
       <main className="relative flex-1 overflow-hidden">
-        {!ready && (
-          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-gray-950 gap-4">
-            <div className="flex items-center gap-3">
-              <img src={logoImg} alt="SelfDNS" className="w-9 h-9 rounded-xl shadow-lg shadow-black/20" />
-              <div>
-                <p className="text-white font-semibold text-lg leading-tight">SelfDNS</p>
-                <p className="text-gray-500 text-xs">Control Center</p>
-              </div>
-            </div>
-
-            {error ? (
-              <div className="flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300">
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl max-w-sm">
-                  <p className="text-red-400 text-sm font-medium mb-1">Startup failed</p>
-                  <p className="text-red-300/70 text-xs leading-relaxed whitespace-pre-wrap">{error}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs rounded-lg border border-white/5 transition-colors"
-                  >
-                    Retry
-                  </button>
-                  <button
-                    onClick={() => window.go?.main?.App?.Elevate?.()}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg font-medium transition-colors"
-                  >
-                    Elevate &amp; Restart
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-gray-500 text-sm">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                Starting DNS server…
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="h-full overflow-y-auto">
+        {!ready && <Boot error={error} />}
+        <div className="h-full overflow-y-auto animate-fade-in">
           <Page api={api} />
         </div>
       </main>
+    </div>
+  )
+}
+
+function Boot({ error }) {
+  return (
+    <div className="absolute inset-0 z-40 bg-ink-50/95 backdrop-blur-sm
+                    flex flex-col items-center justify-center gap-6 animate-fade-in">
+      <div className="flex flex-col items-center gap-3">
+        <div className="relative">
+          <img src={logoImg} alt="" className="h-12 w-12 rounded-xl" />
+          {!error && (
+            <span className="absolute inset-0 rounded-xl ring-1 ring-accent/40 animate-breath" />
+          )}
+        </div>
+        <div className="text-center">
+          <p className="font-display text-base font-semibold tracking-tight text-text-primary">
+            SelfDNS
+          </p>
+          <p className="text-2xs uppercase tracking-widest text-text-dim mt-1">
+            Bringing DNS up
+          </p>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="w-full max-w-sm flex flex-col items-center gap-3 px-6">
+          <div className="w-full p-3 panel ring-bad/30 bg-bad/5">
+            <p className="text-xs font-semibold text-bad mb-1">Startup failed</p>
+            <p className="text-2xs text-text-secondary leading-relaxed whitespace-pre-wrap font-mono">
+              {error}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => window.location.reload()} className="btn-ghost">
+              Retry
+            </button>
+            <button onClick={() => window.go?.main?.App?.Elevate?.()} className="btn-primary">
+              Elevate &amp; Restart
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-text-muted text-xs">
+          <span className="dot-good animate-pulse-soft" />
+          <span className="font-mono uppercase tracking-widest text-2xs">
+            Resolving
+          </span>
+        </div>
+      )}
     </div>
   )
 }

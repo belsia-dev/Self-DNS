@@ -1,22 +1,28 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Pause, Play, Download, Search, X } from 'lucide-react'
 
-const RESULT_STYLE = {
-  RESOLVED: 'badge-green',
-  CACHED: 'badge-orange',
-  BLOCKED: 'badge-red',
-  ERROR: 'badge-gray',
+const CHIP = {
+  RESOLVED: 'chip-good',
+  CACHED:   'chip-violet',
+  BLOCKED:  'chip-bad',
+  ERROR:    'chip-warn',
 }
+
+const FILTERS = ['ALL', 'RESOLVED', 'CACHED', 'BLOCKED', 'ERROR']
 
 function ts(iso) {
   const d = new Date(iso)
-  return d.toLocaleTimeString('en-US', { hour12: false })
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  const ms = String(d.getMilliseconds()).padStart(3, '0')
+  return `${hh}:${mm}:${ss}.${ms}`
 }
 
 export default function QueryLog({ api }) {
-  const [queries, setQueries] = useState([])
-  const [paused, setPaused] = useState(false)
-  const [filter, setFilter] = useState('')
+  const [queries, setQueries]       = useState([])
+  const [paused, setPaused]         = useState(false)
+  const [filter, setFilter]         = useState('')
   const [typeFilter, setTypeFilter] = useState('ALL')
   const pausedRef = useRef(false)
 
@@ -28,18 +34,24 @@ export default function QueryLog({ api }) {
       try {
         const data = await api.get('/queries')
         setQueries(data ?? [])
-      } catch { }
+      } catch {}
     }
     poll()
     const id = setInterval(poll, 500)
     return () => clearInterval(id)
   }, [api])
 
-  const visible = queries.filter(q => {
-    const domainMatch = !filter || q.domain.toLowerCase().includes(filter.toLowerCase())
-    const typeMatch = typeFilter === 'ALL' || q.result === typeFilter
-    return domainMatch && typeMatch
-  })
+  const visible = useMemo(() => queries.filter(q => {
+    const dm = !filter || q.domain.toLowerCase().includes(filter.toLowerCase())
+    const tm = typeFilter === 'ALL' || q.result === typeFilter
+    return dm && tm
+  }), [queries, filter, typeFilter])
+
+  const counts = useMemo(() => {
+    const c = { ALL: queries.length, RESOLVED: 0, CACHED: 0, BLOCKED: 0, ERROR: 0 }
+    for (const q of queries) c[q.result] = (c[q.result] || 0) + 1
+    return c
+  }, [queries])
 
   const exportCSV = () => {
     const header = 'Timestamp,Domain,Type,Result,Latency(ms),Upstream\n'
@@ -54,93 +66,122 @@ export default function QueryLog({ api }) {
   }
 
   return (
-    <div className="flex flex-col h-full p-6 space-y-4">
-      <div className="flex items-center justify-between pt-2">
+    <div className="flex flex-col h-full px-7 py-6 gap-4">
+      {/* Header */}
+      <header className="flex items-end justify-between pt-2">
         <div>
-          <h1 className="text-xl font-bold text-white">Query Log</h1>
-          <p className="text-sm text-gray-400">{visible.length} entries shown · live updates every 500ms</p>
+          <h1 className="h-page">Query Log</h1>
+          <p className="mt-1 text-xs text-text-muted">
+            <span className="font-mono">{visible.length}</span> shown
+            <span className="mx-2 text-text-dim">·</span>
+            <span className="font-mono">live · 500ms</span>
+          </p>
         </div>
+
         <div className="flex items-center gap-2">
-          <button className="btn-ghost flex items-center gap-2" onClick={exportCSV}>
-            <Download size={14} /> Export CSV
+          <button className="btn-ghost" onClick={exportCSV}>
+            <Download size={12} /> Export CSV
           </button>
           <button
-            className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${paused ? 'btn-primary' : 'bg-yellow-700 hover:bg-yellow-600 text-white'
-              }`}
+            className={paused ? 'btn-primary' : 'btn-ghost'}
             onClick={() => setPaused(p => !p)}
           >
-            {paused ? <><Play size={14} /> Resume</> : <><Pause size={14} /> Pause</>}
+            {paused
+              ? <><Play size={12} /> Resume</>
+              : <><Pause size={12} /> Pause</>}
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="flex gap-3">
+      {/* Filter bar */}
+      <div className="flex gap-2.5 items-center">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-dim" />
           <input
-            className="input pl-8"
-            placeholder="Filter by domain…"
+            className="input pl-7 h-9"
+            placeholder="filter by domain…"
             value={filter}
             onChange={e => setFilter(e.target.value)}
           />
           {filter && (
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-              onClick={() => setFilter('')}>
-              <X size={14} />
+            <button
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-primary"
+              onClick={() => setFilter('')}
+            >
+              <X size={12} />
             </button>
           )}
         </div>
-        <select
-          className="input w-40"
-          value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value)}
-        >
-          {['ALL', 'RESOLVED', 'CACHED', 'BLOCKED', 'ERROR'].map(t => (
-            <option key={t} value={t}>{t}</option>
+
+        <div className="flex items-center gap-1 p-1 panel">
+          {FILTERS.map(t => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={`px-2 h-6 rounded text-2xs font-semibold uppercase tracking-widest transition-colors
+                          ${typeFilter === t
+                            ? 'bg-ink-400 text-text-primary'
+                            : 'text-text-muted hover:text-text-secondary hover:bg-ink-300/60'}`}
+            >
+              {t}
+              <span className="ml-1.5 font-mono text-text-dim">{counts[t] ?? 0}</span>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto rounded-xl border border-gray-700">
-        <table className="w-full text-sm border-collapse">
-          <thead className="sticky top-0 bg-gray-900 z-10">
-            <tr className="text-xs text-gray-500 uppercase tracking-wide">
-              <th className="text-left px-4 py-2.5 font-medium">Time</th>
-              <th className="text-left px-4 py-2.5 font-medium">Domain</th>
-              <th className="text-left px-4 py-2.5 font-medium">Type</th>
-              <th className="text-left px-4 py-2.5 font-medium">Result</th>
-              <th className="text-right px-4 py-2.5 font-medium">Latency</th>
-              <th className="text-left px-4 py-2.5 font-medium">Upstream</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800">
-            {visible.length === 0 && (
+      {/* Table */}
+      <div className="flex-1 overflow-hidden panel-flat flex flex-col">
+        <div className="flex-1 overflow-auto">
+          <table className="table-base">
+            <thead>
               <tr>
-                <td colSpan={6} className="text-center text-gray-500 py-12 text-sm">
-                  {paused ? 'Updates paused.' : 'Waiting for queries…'}
-                </td>
+                <th className="w-[120px]">Time</th>
+                <th>Domain</th>
+                <th className="w-[60px]">Type</th>
+                <th className="w-[100px]">Result</th>
+                <th className="w-[80px] !text-right">Latency</th>
+                <th className="w-[180px]">Upstream</th>
               </tr>
-            )}
-            {visible.map((q, i) => (
-              <tr key={i} className="hover:bg-gray-800/50 transition-colors">
-                <td className="px-4 py-2 font-mono text-xs text-gray-400 whitespace-nowrap">{ts(q.timestamp)}</td>
-                <td className="px-4 py-2 font-mono text-xs text-gray-200 max-w-xs truncate">{q.domain}</td>
-                <td className="px-4 py-2">
-                  <span className="badge-gray font-mono">{q.type}</span>
-                </td>
-                <td className="px-4 py-2">
-                  <span className={RESULT_STYLE[q.result] ?? 'badge-gray'}>{q.result}</span>
-                </td>
-                <td className="px-4 py-2 text-right font-mono text-xs text-gray-400">
-                  {q.latency_ms > 0 ? `${q.latency_ms.toFixed(1)}ms` : '—'}
-                </td>
-                <td className="px-4 py-2 font-mono text-xs text-gray-500 max-w-[140px] truncate">
-                  {q.upstream || '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="!h-32 text-center !text-text-dim font-mono">
+                    {paused ? '— paused —' : 'waiting for queries…'}
+                  </td>
+                </tr>
+              )}
+              {visible.map((q, i) => {
+                const lat = q.latency_ms
+                const latColor = lat === 0 ? 'text-text-dim'
+                  : lat < 30 ? 'text-accent'
+                  : lat < 80 ? 'text-warn'
+                  : 'text-bad'
+                return (
+                  <tr key={i}>
+                    <td className="font-mono text-text-muted">{ts(q.timestamp)}</td>
+                    <td className="font-mono text-text-primary truncate max-w-[280px]">
+                      {q.domain}
+                    </td>
+                    <td>
+                      <span className="text-2xs font-mono text-text-muted">{q.type}</span>
+                    </td>
+                    <td>
+                      <span className={CHIP[q.result] ?? 'chip-mute'}>{q.result}</span>
+                    </td>
+                    <td className={`!text-right font-mono tabular-nums ${latColor}`}>
+                      {lat > 0 ? lat.toFixed(1) + 'ms' : '—'}
+                    </td>
+                    <td className="font-mono text-text-muted truncate max-w-[180px]">
+                      {q.upstream || '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

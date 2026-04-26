@@ -247,6 +247,35 @@ func (c *Cache) Flush() {
 	}
 }
 
+var targetedDeleteQtypes = []uint16{
+	dns.TypeA,
+	dns.TypeAAAA,
+	dns.TypeHTTPS,
+	dns.TypeSVCB,
+	dns.TypeCNAME,
+	dns.TypeMX,
+	dns.TypeTXT,
+}
+
+func (c *Cache) Delete(name string) {
+	norm := strings.ToLower(strings.TrimSpace(name))
+	if norm == "" {
+		return
+	}
+	if !strings.HasSuffix(norm, ".") {
+		norm += "."
+	}
+	for _, qt := range targetedDeleteQtypes {
+		k := cacheKey(norm, qt, dns.ClassINET)
+		s := c.pickShard(k)
+		s.mu.Lock()
+		if e, ok := s.items[k]; ok {
+			s.remove(e)
+		}
+		s.mu.Unlock()
+	}
+}
+
 func (c *Cache) Len() int {
 	total := 0
 	for i := range c.shards {
@@ -377,7 +406,7 @@ func (c *Cache) janitor() {
 }
 
 func cacheKey(name string, qtype, qclass uint16) string {
-	return name + "\x00" + dns.TypeToString[qtype] + "\x00" + dns.ClassToString[qclass]
+	return strings.ToLower(name) + "\x00" + dns.TypeToString[qtype] + "\x00" + dns.ClassToString[qclass]
 }
 
 func parseKey(k string) (string, uint16, uint16, bool) {

@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -26,6 +27,11 @@ type Server struct {
 
 	udp *dns.Server
 	tcp *dns.Server
+
+	blockPageServer      *httpServerAdapter
+	blockPageHTTPSServer *httpServerAdapter
+	blockPageCA          *blockPageCA
+	blockPageCADir       string
 
 	running   atomic.Bool
 	startTime time.Time
@@ -54,12 +60,42 @@ func New(
 
 func (s *Server) Resolver() *resolver.Resolver { return s.resolver }
 
+// SetCADir configures the directory used to persist the block-page CA certificate
+// and key. Call this before Start().
+func (s *Server) SetCADir(dir string) {
+	s.mu.Lock()
+	s.blockPageCADir = dir
+	s.mu.Unlock()
+}
+
+// BlockPageCACert returns the block-page CA certificate in PEM format, or nil
+// if the CA has not been initialised yet (only created when the server starts).
+func (s *Server) BlockPageCACert() []byte {
+	s.mu.RLock()
+	ca := s.blockPageCA
+	s.mu.RUnlock()
+	if ca == nil {
+		return nil
+	}
+	return ca.CertPEM()
+}
+
 func (s *Server) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.running.Load() {
 		return fmt.Errorf("server already running")
+	}
+
+	// Create (or reload) the block-page CA once per server lifetime so the
+	// trust-store installation made by the app-layer remains valid.
+	if s.blockPageCA == nil {
+		if ca, err := loadOrCreateCA(s.blockPageCADir); err == nil {
+			s.blockPageCA = ca
+		} else {
+			log.Printf("[dns] block-page CA init failed: %v", err)
+		}
 	}
 
 	mux := dns.NewServeMux()
@@ -101,6 +137,18 @@ func (s *Server) Start() error {
 		}
 	}
 
+	if err := s.startBlockPageServerLocked(); err != nil {
+		if s.udp != nil {
+			_ = s.udp.Shutdown()
+			s.udp = nil
+		}
+		if s.tcp != nil {
+			_ = s.tcp.Shutdown()
+			s.tcp = nil
+		}
+		return err
+	}
+
 	s.startTime = time.Now()
 	s.running.Store(true)
 	return nil
@@ -110,11 +158,14 @@ func (s *Server) Stop() {
 	s.running.Store(false)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.stopBlockPageServerLocked()
 	if s.udp != nil {
 		_ = s.udp.Shutdown()
+		s.udp = nil
 	}
 	if s.tcp != nil {
 		_ = s.tcp.Shutdown()
+		s.tcp = nil
 	}
 }
 
@@ -132,6 +183,12 @@ func (s *Server) Config() *config.Config {
 	return s.cfg
 }
 
+func (s *Server) ConfigClone() *config.Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return config.Clone(s.cfg)
+}
+
 func (s *Server) Reload(cfg *config.Config) error {
 	s.Stop()
 	s.mu.Lock()
@@ -140,6 +197,55 @@ func (s *Server) Reload(cfg *config.Config) error {
 	s.mu.Unlock()
 	s.resolver.UpdateConfig(cfg)
 	return s.Start()
+}
+
+func (s *Server) ApplyBlockPageConfig(cfg *config.Config) error {
+	if cfg == nil {
+		return fmt.Errorf("config must not be nil")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	prevCfg := s.cfg
+	prevMode := ""
+	prevBind := ""
+	if prevCfg != nil {
+		prevMode = prevCfg.Blocklist.ResponseMode
+		prevBind = prevCfg.Blocklist.BlockPage.Bind
+	}
+
+	s.cfg = cfg
+	if !s.running.Load() {
+		return nil
+	}
+
+	nextMode := cfg.Blocklist.ResponseMode
+	nextBind := cfg.Blocklist.BlockPage.Bind
+
+	switch {
+	case nextMode != config.ResponseModeBlockPage:
+		s.stopBlockPageServerLocked()
+		return nil
+	case prevMode != config.ResponseModeBlockPage:
+		if err := s.startBlockPageServerLocked(); err != nil {
+			s.cfg = prevCfg
+			return err
+		}
+		return nil
+	case prevBind != nextBind:
+		s.stopBlockPageServerLocked()
+		if err := s.startBlockPageServerLocked(); err != nil {
+			s.cfg = prevCfg
+			if prevMode == config.ResponseModeBlockPage {
+				_ = s.startBlockPageServerLocked()
+			}
+			return err
+		}
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
@@ -175,14 +281,14 @@ func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
 	s.mu.RUnlock()
 
 	if ip, ok := lookupHost(hosts, domain); ok {
-		resp := hostResponse(req, ip)
+		resp := staticHostResponse(req, ip)
 		_ = w.WriteMsg(resp)
 		s.record(domain, qtype, stats.ResultResolved, "", time.Since(start), logQ)
 		return
 	}
 
 	if s.blocker.IsBlocked(domain) {
-		writeRcode(w, req, dns.RcodeNameError)
+		_ = w.WriteMsg(s.blockedResponse(w, req))
 		s.record(domain, qtype, stats.ResultBlocked, "", time.Since(start), logQ)
 		return
 	}
@@ -217,4 +323,9 @@ func (s *Server) record(domain, qtype string, result stats.QueryResult, upstream
 		LatencyMs: float64(latency.Microseconds()) / 1000.0,
 		Upstream:  upstream,
 	})
+}
+
+type httpServerAdapter struct {
+	addr     string
+	shutdown func(context.Context) error
 }

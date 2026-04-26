@@ -14,7 +14,7 @@
     "companyName": "Belsia Dev",
     "productName": "SelfDNS Control Center",
     "productVersion": "1.0.0",
-    "copyright": "© 2024 Belsia Dev",
-    "comments": "Local DNS resolver with DoT upstream support"
+    "copyright": "© 2064 Belsia Dev",
+    "comments": "Local DNS resolver"
   }
 }

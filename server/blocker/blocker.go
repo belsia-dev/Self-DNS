@@ -9,6 +9,8 @@ import (
 	"github.com/belsia-dev/Self-DNS/server/config"
 )
 
+var normalise = config.NormalizeDomain
+
 type FileInfo struct {
 	Path   string `json:"path"`
 	Count  int    `json:"count"`
@@ -45,8 +47,17 @@ func (b *Blocker) IsBlocked(domain string) bool {
 	if !b.enabled {
 		return false
 	}
-	_, ok := b.domains[normalise(domain)]
-	return ok
+	domain = normalise(domain)
+	for {
+		if _, ok := b.domains[domain]; ok {
+			return true
+		}
+		idx := strings.IndexByte(domain, '.')
+		if idx < 0 {
+			return false
+		}
+		domain = domain[idx+1:]
+	}
 }
 
 func (b *Blocker) Add(domain string) {
@@ -181,7 +192,3 @@ func parseLine(line string) string {
 	return ""
 }
 
-func normalise(domain string) string {
-	d := strings.ToLower(strings.TrimSpace(domain))
-	return strings.TrimSuffix(d, ".")
-}

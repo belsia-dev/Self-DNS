@@ -17,3 +17,5 @@ export function GetVersion():Promise<string>;
 export function IsDNSRunning():Promise<boolean>;
 
 export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Promise<string>;
+
+export function SystemDNSStatus():Promise<Record<string, any>>;

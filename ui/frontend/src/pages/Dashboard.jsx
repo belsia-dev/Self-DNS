@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import {
   AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
   Activity, ShieldOff, Database, Clock,
-  Trash2, RefreshCw, Power, Zap, Flame, Server,
+  Trash2, RefreshCw, Power, Zap, Flame, Server, ArrowDown,
 } from 'lucide-react'
 import StatCard from '../components/StatCard.jsx'
 
@@ -17,27 +17,36 @@ function fmt(n) {
 }
 
 function fmtUptime(sec) {
-  if (!sec) return '—'
+  if (!sec) return 'just started'
   const h = Math.floor(sec / 3600)
   const m = Math.floor((sec % 3600) / 60)
   const s = Math.floor(sec % 60)
-  if (h > 0) return `${h}h ${m}m uptime`
-  if (m > 0) return `${m}m ${s}s uptime`
-  return `${s}s uptime`
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
 }
 
-const chartTooltipStyle = {
-  contentStyle: { background: '#111827', border: '1px solid #1f2937', borderRadius: 8, fontSize: 11 },
-  labelStyle: { color: '#6b7280' },
+const tooltipProps = {
+  contentStyle: {
+    background: '#0f0f10',
+    border: '1px solid #1f1f23',
+    borderRadius: 6,
+    fontSize: 11,
+    fontFamily: 'JetBrains Mono, monospace',
+    padding: '4px 8px',
+  },
+  labelStyle: { color: '#6e6e74' },
+  cursor: { fill: 'rgba(163, 230, 53, 0.05)' },
 }
 
 export default function Dashboard({ api }) {
-  const [stats, setStats] = useState(null)
-  const [status, setStatus] = useState(null)
+  const [stats, setStats]         = useState(null)
+  const [status, setStatus]       = useState(null)
   const [upstreams, setUpstreams] = useState([])
-  const [hot, setHot] = useState([])
-  const [netDNS, setNetDNS] = useState({ network_dns: [], system_dns: [] })
-  const [toast, setToast] = useState('')
+  const [hot, setHot]             = useState([])
+  const [netDNS, setNetDNS]       = useState({ network_dns: [], system_dns: [] })
+  const [toast, setToast]         = useState('')
 
   useEffect(() => {
     let alive = true
@@ -70,225 +79,327 @@ export default function Dashboard({ api }) {
   }, [api])
 
   const action = async (path, label) => {
-    try { await api.post(path, {}); setToast(`${label} OK`) }
-    catch { setToast(`${label} failed`) }
-    setTimeout(() => setToast(''), 3000)
+    try { await api.post(path, {}); setToast(`${label} · ok`) }
+    catch { setToast(`${label} · failed`) }
+    setTimeout(() => setToast(''), 2500)
   }
 
-  const qpsData = (stats?.qps_history ?? Array(60).fill(0)).map((v, i) => ({ t: i, qps: v }))
+  const qpsData    = (stats?.qps_history ?? Array(60).fill(0)).map((v, i) => ({ t: i, qps: v }))
   const topDomains = (stats?.top_domains ?? []).slice(0, 5)
   const topBlocked = (stats?.top_blocked ?? []).slice(0, 5)
-  const running = status?.running
+  const running    = status?.running
 
   return (
-    <div className="p-6 space-y-5">
-
-      <div className="flex items-start justify-between pt-2">
+    <div className="px-7 py-6 space-y-6 max-w-[1400px]">
+      <header className="flex items-end justify-between pt-2">
         <div>
-          <h1 className="text-xl font-bold text-white">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-gray-500">{fmtUptime(status?.uptime)}</p>
+          <h1 className="h-page">Dashboard</h1>
+          <p className="mt-1 text-xs text-text-muted">
+            <span className="font-mono">{fmtUptime(status?.uptime)}</span>
+            <span className="mx-2 text-text-dim">·</span>
+            <span className="font-mono">{status?.listen ?? '—'}</span>
+          </p>
         </div>
 
-        <div className={`flex items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-semibold
-                         border transition-colors ${running == null
-            ? 'bg-gray-800 text-gray-500 border-gray-700'
-            : running
-              ? 'bg-green-900/30 text-green-400 border-green-700/40'
-              : 'bg-red-900/30 text-red-400 border-red-700/40'
-          }`}>
-          <span className={`h-2.5 w-2.5 rounded-full ${running == null ? 'bg-gray-500'
-            : running ? 'bg-green-400 animate-pulse'
-              : 'bg-red-400'
-            }`} />
-          {running == null ? 'Connecting…'
-            : running ? 'SelfDNS RUNNING'
-              : 'SelfDNS STOPPED'}
-        </div>
-      </div>
+        <RuntimeBadge running={running} />
+      </header>
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <StatCard label="Queries Today" value={fmt(stats?.total_queries)}
-          color="blue" icon={Activity} sub={`${(stats?.queries_per_sec ?? 0).toFixed(1)} /sec`} />
-        <StatCard label="Cache Hit Rate" value={stats ? stats.cache_hit_rate.toFixed(1) + '%' : '—'}
-          color="green" icon={Database} sub={`${fmt(stats?.total_cached)} cached`} />
-        <StatCard label="Blocked Today" value={fmt(stats?.total_blocked)}
-          color="red" icon={ShieldOff} sub="NXDOMAIN responses" />
-        <StatCard label="Avg Latency" value={stats ? stats.avg_latency_ms.toFixed(1) + ' ms' : '—'}
-          color="orange" icon={Clock} sub="upstream round-trip" />
-      </div>
+      <section className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <StatCard
+          label="Queries"
+          value={fmt(stats?.total_queries)}
+          sub={`${(stats?.queries_per_sec ?? 0).toFixed(1)}/s · today`}
+          accent="accent"
+          icon={Activity}
+        />
+        <StatCard
+          label="Cache"
+          value={stats ? stats.cache_hit_rate.toFixed(0) + '%' : '—'}
+          sub={`${fmt(stats?.total_cached)} cached`}
+          accent="info"
+          icon={Database}
+        />
+        <StatCard
+          label="Blocked"
+          value={fmt(stats?.total_blocked)}
+          sub="rejected by policy"
+          accent="bad"
+          icon={ShieldOff}
+        />
+        <StatCard
+          label="Latency"
+          value={stats ? stats.avg_latency_ms.toFixed(1) + 'ms' : '—'}
+          sub="upstream avg"
+          accent="warn"
+          icon={Clock}
+        />
+      </section>
 
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-gray-200">Queries / Second</p>
-          <p className="text-xs text-gray-600">rolling 60 s</p>
-        </div>
-        <ResponsiveContainer width="100%" height={110}>
-          <AreaChart data={qpsData} margin={{ top: 2, right: 0, left: -24, bottom: 0 }}>
-            <defs>
-              <linearGradient id="qg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-            <XAxis dataKey="t" hide />
-            <YAxis tick={{ fill: '#4b5563', fontSize: 10 }} allowDecimals={false} />
-            <Tooltip {...chartTooltipStyle} itemStyle={{ color: '#60a5fa' }} />
-            <Area type="monotone" dataKey="qps" stroke="#3b82f6" strokeWidth={2}
-              fill="url(#qg)" dot={false} activeDot={{ r: 3 }} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { title: 'Top Queried Domains', data: topDomains, color: '#3b82f6' },
-          { title: 'Top Blocked Domains', data: topBlocked, color: '#ef4444' },
-        ].map(({ title, data, color }) => (
-          <div key={title} className="card">
-            <p className="mb-3 text-sm font-semibold text-gray-200">{title}</p>
-            {data.length === 0
-              ? <p className="py-6 text-center text-xs text-gray-600">No data yet</p>
-              : <ResponsiveContainer width="100%" height={150}>
-                <BarChart data={data} layout="vertical" margin={{ left: 0, right: 8, top: 2, bottom: 2 }}>
-                  <XAxis type="number" tick={{ fill: '#4b5563', fontSize: 10 }} allowDecimals={false} />
-                  <YAxis type="category" dataKey="domain"
-                    tick={{ fill: '#9ca3af', fontSize: 10 }} width={110} />
-                  <Tooltip {...chartTooltipStyle} itemStyle={{ color }} />
-                  <Bar dataKey="count" fill={color} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            }
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-200">
-              <Server size={13} className="text-gray-500" /> Upstream Health
+      <section className="panel p-4">
+        <div className="flex items-end justify-between mb-2">
+          <div>
+            <p className="h-card">Queries per second</p>
+            <p className="mt-0.5 num-display text-[20px] leading-none">
+              {(stats?.queries_per_sec ?? 0).toFixed(1)}
+              <span className="ml-1 text-2xs font-mono text-text-muted tracking-normal">/s</span>
             </p>
-            <p className="text-[10px] text-gray-600 uppercase tracking-wider">live</p>
           </div>
-          {upstreams.length === 0
-            ? <p className="py-6 text-center text-xs text-gray-600">No upstream data yet</p>
-            : <div className="space-y-1.5">
-              {upstreams.map(u => {
-                const healthy = u.fail_streak === 0
-                const latBucket = u.avg_ms === 0 ? 'gray'
-                  : u.avg_ms < 30 ? 'green'
-                    : u.avg_ms < 80 ? 'orange' : 'red'
-                const colors = {
-                  green: 'text-green-400 bg-green-900/20 border-green-800/40',
-                  orange: 'text-orange-400 bg-orange-900/20 border-orange-800/40',
-                  red: 'text-red-400 bg-red-900/20 border-red-800/40',
-                  gray: 'text-gray-400 bg-gray-800 border-gray-700',
-                }
-                return (
-                  <div key={u.server} className="flex items-center justify-between px-3 py-1.5 rounded-lg border border-gray-700/50 bg-gray-900/40">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`h-2 w-2 rounded-full ${healthy ? 'bg-green-400' : 'bg-red-400'}`} />
-                      <span className="text-xs font-mono text-gray-300 truncate">{u.server}</span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {u.fail_streak > 0 && (
-                        <span className="text-[10px] text-red-400 font-mono">{u.fail_streak} fails</span>
-                      )}
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${colors[latBucket]}`}>
-                        {u.avg_ms > 0 ? u.avg_ms.toFixed(1) + 'ms' : '—'}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-
-              {(netDNS.network_dns?.length > 0 || netDNS.system_dns?.length > 0) && (
-                <div className="mt-2 pt-2 border-t border-gray-700/40 space-y-1">
-                  <p className="text-[10px] text-gray-600 uppercase tracking-wider px-1">Resolution order</p>
-                  {netDNS.system_dns?.filter(s => !s.startsWith('127.')).map((s, i) => (
-                    <div key={s} className="flex items-center justify-between px-3 py-1 rounded-lg border border-gray-700/30 bg-gray-900/20">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-mono text-gray-600 w-3">{i + 1}</span>
-                        <span className="h-1.5 w-1.5 rounded-full bg-blue-400/60" />
-                        <span className="text-[11px] font-mono text-gray-400">{s}</span>
-                      </div>
-                      <span className="text-[10px] text-blue-500 bg-blue-900/20 px-1.5 py-0.5 rounded border border-blue-800/30">system</span>
-                    </div>
-                  ))}
-                  {netDNS.network_dns?.map((s, i) => {
-                    const offset = (netDNS.system_dns?.filter(x => !x.startsWith('127.')).length ?? 0) + i + 1
-                    return (
-                      <div key={s} className="flex items-center justify-between px-3 py-1 rounded-lg border border-yellow-800/30 bg-yellow-900/10">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-mono text-gray-600 w-3">{offset}</span>
-                          <span className="h-1.5 w-1.5 rounded-full bg-yellow-400/80" />
-                          <span className="text-[11px] font-mono text-yellow-300/80">{s}</span>
-                        </div>
-                        <span className="text-[10px] text-yellow-600 bg-yellow-900/20 px-1.5 py-0.5 rounded border border-yellow-800/30">router</span>
-                      </div>
-                    )
-                  })}
-                  <div className="flex items-center justify-between px-3 py-1 rounded-lg border border-purple-800/30 bg-purple-900/10">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono text-gray-600 w-3">↓</span>
-                      <span className="h-1.5 w-1.5 rounded-full bg-purple-400/80" />
-                      <span className="text-[11px] font-mono text-purple-300/70">DoT upstreams (1.1.1.1, 8.8.8.8…)</span>
-                    </div>
-                    <span className="text-[10px] text-purple-500 bg-purple-900/20 px-1.5 py-0.5 rounded border border-purple-800/30">last resort</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          }
+          <p className="text-2xs font-mono text-text-dim uppercase tracking-widest">
+            rolling 60s
+          </p>
         </div>
+        <div className="h-[120px] -mx-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={qpsData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="qg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"   stopColor="#a3e635" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#a3e635" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="t" hide />
+              <YAxis tick={{ fill: '#4a4a50', fontSize: 9 }} allowDecimals={false} width={28} />
+              <Tooltip {...tooltipProps} itemStyle={{ color: '#a3e635' }} />
+              <Area
+                type="monotone" dataKey="qps"
+                stroke="#a3e635" strokeWidth={1.5}
+                fill="url(#qg)" dot={false}
+                activeDot={{ r: 3, fill: '#a3e635', stroke: '#0a0a0a', strokeWidth: 2 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
 
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-200">
-              <Flame size={13} className="text-orange-400" /> Hot Domains
-            </p>
-            <p className="text-[10px] text-gray-600 uppercase tracking-wider">prefetched</p>
+      <section className="grid stable-grid-cols-2 gap-3">
+        <TopList title="Most queried"  data={topDomains} color="#7dd3fc" />
+        <TopList title="Most blocked"  data={topBlocked} color="#f87171" />
+      </section>
+
+      <section className="grid stable-grid-cols-2 gap-3">
+        <UpstreamPanel upstreams={upstreams} netDNS={netDNS} />
+        <HotPanel hot={hot} />
+      </section>
+
+      <section className="panel p-3.5">
+        <div className="flex items-center justify-between">
+          <p className="h-card">Quick actions</p>
+          {toast && (
+            <span className="text-2xs font-mono text-accent uppercase tracking-widest animate-fade-in">
+              {toast}
+            </span>
+          )}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className="btn-ghost" onClick={() => action('/cache/flush',   'flush')}>
+            <Trash2 size={12} /> Flush cache
+          </button>
+          <button className="btn-ghost" onClick={() => action('/prefetch/run',  'prefetch')}>
+            <Zap size={12} /> Prefetch hot
+          </button>
+          <button className="btn-ghost" onClick={() => action('/server/restart','restart')}>
+            <RefreshCw size={12} /> Restart
+          </button>
+          <button className="btn-danger" onClick={() => action('/server/stop',  'stop')}>
+            <Power size={12} /> Stop server
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RuntimeBadge({ running }) {
+  if (running == null) {
+    return (
+      <div className="flex items-center gap-2 px-2.5 h-8 rounded-md bg-ink-200 ring-1 ring-line">
+        <span className="dot-mute" />
+        <span className="text-2xs font-mono uppercase tracking-widest text-text-muted">
+          connecting
+        </span>
+      </div>
+    )
+  }
+  if (running) {
+    return (
+      <div className="flex items-center gap-2 px-2.5 h-8 rounded-md bg-accent/10 ring-1 ring-accent/30">
+        <span className="relative inline-flex h-2 w-2">
+          <span className="absolute inset-0 rounded-full bg-accent opacity-50 animate-ping" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
+        </span>
+        <span className="text-2xs font-mono uppercase tracking-widest text-accent">
+          running
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-2 px-2.5 h-8 rounded-md bg-bad/10 ring-1 ring-bad/30">
+      <span className="dot-bad" />
+      <span className="text-2xs font-mono uppercase tracking-widest text-bad">
+        stopped
+      </span>
+    </div>
+  )
+}
+
+function TopList({ title, data, color }) {
+  return (
+    <div className="panel p-4">
+      <p className="h-card mb-3">{title}</p>
+      {data.length === 0
+        ? <p className="py-6 text-center text-2xs text-text-dim font-mono">no data</p>
+        : (
+          <div className="h-[150px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} layout="vertical" margin={{ left: 0, right: 8, top: 2, bottom: 2 }}>
+                <XAxis type="number" tick={{ fill: '#4a4a50', fontSize: 9 }} allowDecimals={false} />
+                <YAxis
+                  type="category" dataKey="domain"
+                  tick={{ fill: '#a3a3a8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                  width={120}
+                />
+                <Tooltip {...tooltipProps} itemStyle={{ color }} />
+                <Bar dataKey="count" fill={color} radius={[0, 2, 2, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-          {hot.length === 0
-            ? <p className="py-6 text-center text-xs text-gray-600">No hot entries yet</p>
-            : <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
-              {hot.slice(0, 10).map((h, i) => (
-                <div key={i} className="flex items-center justify-between px-2 py-1 rounded-lg hover:bg-gray-900/40">
-                  <span className="text-xs font-mono text-gray-300 truncate">{h.name}</span>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-gray-600 font-mono">{h.ttl_sec}s</span>
-                    <span className="text-[10px] font-mono text-orange-400">{h.hits}×</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          }
-        </div>
+        )
+      }
+    </div>
+  )
+}
+
+function UpstreamPanel({ upstreams, netDNS }) {
+  const sysDNS = (netDNS.system_dns ?? []).filter(s => !s.startsWith('127.'))
+  const netRouter = netDNS.network_dns ?? []
+
+  return (
+    <div className="panel p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="h-card flex items-center gap-1.5">
+          <Server size={11} className="text-text-dim" /> Upstream chain
+        </p>
+        <span className="dot-good" />
       </div>
 
-      <div className="card">
-        <p className="mb-3 text-sm font-semibold text-gray-200">Quick Actions</p>
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-ghost flex items-center gap-2"
-            onClick={() => action('/cache/flush', 'Flush cache')}>
-            <Trash2 size={13} /> Flush Cache
-          </button>
-          <button className="btn-ghost flex items-center gap-2"
-            onClick={() => action('/prefetch/run', 'Prefetch')}>
-            <Zap size={13} /> Prefetch Hot
-          </button>
-          <button className="btn-primary flex items-center gap-2"
-            onClick={() => action('/server/restart', 'Restart')}>
-            <RefreshCw size={13} /> Restart Server
-          </button>
-          <button className="btn-danger flex items-center gap-2"
-            onClick={() => action('/server/stop', 'Stop')}>
-            <Power size={13} /> Stop Server
-          </button>
-          {toast && <span className="ml-2 text-xs text-blue-400 self-center">{toast}</span>}
+      {upstreams.length === 0 ? (
+        <p className="py-6 text-center text-2xs text-text-dim font-mono">no data</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Tier label="DoT" tone="violet" />
+            {upstreams.map(u => <UpstreamRow key={u.server} u={u} />)}
+          </div>
+
+          {netRouter.length > 0 && (
+            <div className="space-y-1">
+              <FallArrow />
+              <Tier label="router" tone="warn" />
+              {netRouter.map(s => <FallbackRow key={s} addr={s} />)}
+            </div>
+          )}
+
+          {sysDNS.length > 0 && (
+            <div className="space-y-1">
+              <FallArrow />
+              <Tier label="system" tone="info" />
+              {sysDNS.map(s => <FallbackRow key={s} addr={s} />)}
+            </div>
+          )}
         </div>
+      )}
+    </div>
+  )
+}
+
+function Tier({ label, tone }) {
+  const cls = tone === 'violet' ? 'chip-violet'
+            : tone === 'warn'   ? 'chip-warn'
+            : tone === 'info'   ? 'chip-info'
+            : 'chip-mute'
+  return (
+    <div className="flex items-center gap-2">
+      <span className={cls}>{label}</span>
+      <span className="h-px flex-1 bg-line/40" />
+    </div>
+  )
+}
+
+function FallArrow() {
+  return (
+    <div className="flex justify-center py-0.5">
+      <ArrowDown size={11} className="text-text-dim" />
+    </div>
+  )
+}
+
+function UpstreamRow({ u }) {
+  const healthy = u.fail_streak === 0
+  const tone =
+    u.avg_ms === 0 ? 'mute'
+    : u.avg_ms < 30 ? 'good'
+    : u.avg_ms < 80 ? 'warn'
+    : 'bad'
+  const toneClass = {
+    good: 'text-accent',
+    warn: 'text-warn',
+    bad: 'text-bad',
+    mute: 'text-text-muted',
+  }[tone]
+
+  return (
+    <div className="flex items-center justify-between rounded-md px-2.5 h-7 bg-ink-300/40">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={healthy ? 'dot-good' : 'dot-bad'} />
+        <span className="text-2xs font-mono text-text-secondary truncate">{u.server}</span>
       </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {u.fail_streak > 0 && (
+          <span className="text-2xs font-mono text-bad">{u.fail_streak}f</span>
+        )}
+        <span className={`text-2xs font-mono tabular-nums ${toneClass}`}>
+          {u.avg_ms > 0 ? u.avg_ms.toFixed(1) + 'ms' : '—'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function FallbackRow({ addr }) {
+  return (
+    <div className="flex items-center gap-2 px-2.5 h-7 rounded-md bg-ink-300/30">
+      <span className="dot-mute" />
+      <span className="text-2xs font-mono text-text-muted">{addr}</span>
+    </div>
+  )
+}
+
+function HotPanel({ hot }) {
+  return (
+    <div className="panel p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="h-card flex items-center gap-1.5">
+          <Flame size={11} className="text-warn" /> Hot domains
+        </p>
+        <p className="text-2xs font-mono text-text-dim uppercase tracking-widest">prefetched</p>
+      </div>
+      {hot.length === 0
+        ? <p className="py-6 text-center text-2xs text-text-dim font-mono">no entries</p>
+        : (
+          <div className="space-y-0.5 max-h-[220px] overflow-y-auto">
+            {hot.slice(0, 12).map((h, i) => (
+              <div key={i} className="flex items-center justify-between rounded px-2 h-7 row-hover">
+                <span className="text-2xs font-mono text-text-secondary truncate">{h.name}</span>
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <span className="text-2xs font-mono text-text-dim">{h.ttl_sec}s</span>
+                  <span className="text-2xs font-mono text-warn tabular-nums">{h.hits}×</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
     </div>
   )
 }

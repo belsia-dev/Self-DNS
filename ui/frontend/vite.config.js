@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 34115, // Wails dev server port
+    port: 34115, // Wails dev server port 
   },
   build: {
     outDir: 'dist',

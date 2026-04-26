@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os/exec"
+	"runtime"
 )
 
 func jsonOK(w http.ResponseWriter, v any) {
@@ -32,13 +34,16 @@ func isLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func ensureLoopback(addr, defaultPort string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "127.0.0.1:" + defaultPort
+func flushOSDNSCache() {
+	switch runtime.GOOS {
+	case "darwin":
+		_ = exec.Command("dscacheutil", "-flushcache").Run()
+		_ = exec.Command("killall", "-HUP", "mDNSResponder").Run()
+	case "linux":
+		if err := exec.Command("resolvectl", "flush-caches").Run(); err != nil {
+			_ = exec.Command("nscd", "-i", "hosts").Run()
+		}
+	case "windows":
+		_ = exec.Command("ipconfig", "/flushdns").Run()
 	}
-	if !isLoopback(host) {
-		return "127.0.0.1:" + port
-	}
-	return addr
 }

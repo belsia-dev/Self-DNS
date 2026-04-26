@@ -91,6 +91,7 @@ func (a *API) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/hosts/add", a.handleHostsAdd)
 	mux.HandleFunc("/api/hosts/remove", a.handleHostsRemove)
 	mux.HandleFunc("/api/config", a.handleConfig)
+	mux.HandleFunc("/api/config/block-page", a.handleBlockPageConfig)
 	mux.HandleFunc("/api/server/restart", a.handleRestart)
 	mux.HandleFunc("/api/server/stop", a.handleStop)
 	mux.HandleFunc("/api/cache/stats", a.handleCacheStats)
@@ -101,4 +102,5 @@ func (a *API) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/upstreams", a.handleUpstreams)
 	mux.HandleFunc("/api/prefetch/run", a.handlePrefetchRun)
 	mux.HandleFunc("/api/network-dns", a.handleNetworkDNS)
+	mux.HandleFunc("/api/ca-cert", a.handleCACert)
 }
