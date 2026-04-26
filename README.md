@@ -17,9 +17,9 @@ All Queries are encrypted using DNS Over TLS (DOT), which can protect your data.
 ---
 # Quick Start
 - macOS / Linux: 
-``` curl -fsSL https://github.com/belsia-dev/Self-DNS/install/install.sh | bash ```
+``` curl -fsSL hhttps://raw.githubusercontent.com/belsia-dev/Self-DNS/refs/heads/main/install/install.sh | bash ```
 - Windows PowerShell: 
-``` irm https://github.com/belsia-dev/Self-DNS/install/install.ps1 | iex ```
+``` irm https://raw.githubusercontent.com/belsia-dev/Self-DNS/refs/heads/main/install/install.ps1 | iex ```
 
 Both installers can clone the repository for you, install missing `git`, `go`, `node`/`npm`, and `wails` after confirmation, then run the Wails build automatically. On macOS, `install.sh` also moves the finished `.app` bundle into `/Applications`.
 
