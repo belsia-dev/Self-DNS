@@ -142,8 +142,6 @@ func (s *Server) stopBlockPageServerLocked() {
 		_ = s.blockPageHTTPSServer.shutdown(ctx)
 		s.blockPageHTTPSServer = nil
 	}
-	// Clear the leaf-cert cache so that if the CA is regenerated on the
-	// next Start(), old certs signed by the previous CA are not reused.
 	if s.blockPageCA != nil {
 		s.blockPageCA.mu.Lock()
 		s.blockPageCA.cache = make(map[string]*tls.Certificate)

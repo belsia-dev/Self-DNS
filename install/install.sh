@@ -9,7 +9,7 @@ APP_BUNDLE_NAME="SelfDNS Control Center.app"
 MACOS_INSTALL_DIR="/Applications"
 WAILS_VERSION="v2.12.0"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 WORK_DIR="$(pwd)"
 TARGET_DIR=""
 OS_NAME="$(uname -s)"

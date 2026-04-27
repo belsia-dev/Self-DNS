@@ -17,7 +17,7 @@ All Queries are encrypted using DNS Over TLS (DOT), which can protect your data.
 ---
 # Quick Start
 - macOS / Linux: 
-``` curl -fsSL hhttps://raw.githubusercontent.com/belsia-dev/Self-DNS/refs/heads/main/install/install.sh | bash ```
+``` curl -fsSL https://raw.githubusercontent.com/belsia-dev/Self-DNS/refs/heads/main/install/install.sh | bash ```
 - Windows PowerShell: 
 ``` irm https://raw.githubusercontent.com/belsia-dev/Self-DNS/refs/heads/main/install/install.ps1 | iex ```
 

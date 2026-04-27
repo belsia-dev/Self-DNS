@@ -358,7 +358,6 @@ func (a *App) installBlockPageCA() {
 			log.Println("[selfdns-app] CA: installed in Windows LocalMachine Root")
 		}
 	case "linux":
-		// Try Debian/Ubuntu, then RHEL/Fedora — both require root which we have.
 		debDest := "/usr/local/share/ca-certificates/selfdns-ca.crt"
 		if err := exec.Command("cp", tmpName, debDest).Run(); err == nil {
 			_ = exec.Command("update-ca-certificates").Run()

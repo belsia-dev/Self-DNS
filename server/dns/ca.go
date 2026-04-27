@@ -22,9 +22,6 @@ const (
 	caKeyFile  = "blockpage-ca-key.pem"
 )
 
-// blockPageCA issues per-hostname TLS leaf certificates signed by a
-// self-signed root CA. The CA is persisted to disk so the system
-// trust-store installation remains valid across restarts.
 type blockPageCA struct {
 	cert *x509.Certificate
 	key  *ecdsa.PrivateKey
@@ -33,8 +30,6 @@ type blockPageCA struct {
 	cache map[string]*tls.Certificate
 }
 
-// loadOrCreateCA loads the CA from dir, or generates a new one and saves it.
-// If dir is empty it falls back to in-memory generation.
 func loadOrCreateCA(dir string) (*blockPageCA, error) {
 	if dir == "" {
 		return generateCA()
@@ -46,7 +41,6 @@ func loadOrCreateCA(dir string) (*blockPageCA, error) {
 		if ca, err := parseCA(certPEM, keyPEM); err == nil {
 			return ca, nil
 		}
-		// Corrupt files — fall through to regenerate.
 	}
 
 	ca, err := generateCA()
@@ -113,15 +107,10 @@ func parseCA(certPEM, keyPEM []byte) (*blockPageCA, error) {
 	return &blockPageCA{cert: cert, key: key, cache: make(map[string]*tls.Certificate)}, nil
 }
 
-// CertPEM returns the CA certificate in PEM format (the public part that
-// needs to be added to the system trust store).
 func (ca *blockPageCA) CertPEM() []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.cert.Raw})
 }
 
-// tlsConfig returns a *tls.Config whose GetCertificate callback dynamically
-// issues a leaf certificate signed by this CA for whatever hostname the
-// browser requests via SNI.
 func (ca *blockPageCA) tlsConfig() *tls.Config {
 	return &tls.Config{
 		GetCertificate: ca.getCertificate,
@@ -162,8 +151,6 @@ func (ca *blockPageCA) issue(hostname string) (*tls.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Chrome enforces a 398-day maximum validity for leaf certs (since Chrome 90).
-	// Any cert exceeding this is rejected regardless of CA trust.
 	const maxLeafValidity = 397 * 24 * time.Hour
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,

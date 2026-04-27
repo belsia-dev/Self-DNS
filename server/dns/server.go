@@ -60,16 +60,12 @@ func New(
 
 func (s *Server) Resolver() *resolver.Resolver { return s.resolver }
 
-// SetCADir configures the directory used to persist the block-page CA certificate
-// and key. Call this before Start().
 func (s *Server) SetCADir(dir string) {
 	s.mu.Lock()
 	s.blockPageCADir = dir
 	s.mu.Unlock()
 }
 
-// BlockPageCACert returns the block-page CA certificate in PEM format, or nil
-// if the CA has not been initialised yet (only created when the server starts).
 func (s *Server) BlockPageCACert() []byte {
 	s.mu.RLock()
 	ca := s.blockPageCA
@@ -88,8 +84,6 @@ func (s *Server) Start() error {
 		return fmt.Errorf("server already running")
 	}
 
-	// Create (or reload) the block-page CA once per server lifetime so the
-	// trust-store installation made by the app-layer remains valid.
 	if s.blockPageCA == nil {
 		if ca, err := loadOrCreateCA(s.blockPageCADir); err == nil {
 			s.blockPageCA = ca

@@ -99,7 +99,6 @@ export default function Security({ api }) {
         </button>
       </header>
 
-      {/* Score panel */}
       <section className="panel p-5 flex items-center gap-6">
         <ScoreRing score={score} />
         <div className="flex-1 min-w-0">
@@ -122,7 +121,6 @@ export default function Security({ api }) {
             </span>
           </div>
 
-          {/* Score bar */}
           <div className="mt-4 h-1.5 w-full rounded-full bg-ink-300 overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-700"
@@ -137,7 +135,6 @@ export default function Security({ api }) {
         </div>
       </section>
 
-      {/* Checks list */}
       <section className="space-y-1.5">
         {checks.map(check => (
           <div
