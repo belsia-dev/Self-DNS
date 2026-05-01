@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { Component, useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import QueryLog from './pages/QueryLog.jsx'
@@ -14,7 +14,7 @@ const API_BASE = 'http://127.0.0.1:5380/api'
 async function readJSON(response) {
   const text = await response.text()
   if (!text) return null
-  try { return JSON.parse(text) } catch { return null }
+  try { return JSON.parse(text) } catch (err) { console.error('[App]:', err); return null }
 }
 
 async function request(path, options) {
@@ -31,6 +31,34 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }),
+}
+
+class GlobalErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) { return { hasError: true, error } }
+  componentDidCatch(error, info) { console.error('[App]:', error, info.componentStack) }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen gap-4 px-8 bg-ink-50 text-text-primary">
+          <p className="text-sm font-semibold text-bad">Something went wrong</p>
+          <pre className="text-2xs font-mono text-text-muted bg-ink-100 rounded-md px-4 py-3 max-w-lg overflow-auto ring-1 ring-line">
+            {String(this.state.error)}
+          </pre>
+          <button
+            className="btn-primary"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Retry
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 const PAGES = {
@@ -67,13 +95,14 @@ export default function App() {
           setReady(true)
           setError('')
         }
-      } catch {
+      } catch (err) {
+        console.error('[App]:', err)
         if (mounted) {
           setRunning(false)
           try {
             const err = await window.go?.main?.App?.GetStartError?.()
             if (err) setError(err)
-          } catch {}
+          } catch (err) { console.error('[App]:', err) }
         }
       }
     }
@@ -105,7 +134,9 @@ export default function App() {
       <main className="relative flex-1 overflow-hidden">
         {!ready && <Boot error={error} />}
         <div className="h-full overflow-y-auto animate-fade-in">
-          <Page api={api} />
+          <GlobalErrorBoundary>
+            <Page api={api} />
+          </GlobalErrorBoundary>
         </div>
       </main>
     </div>

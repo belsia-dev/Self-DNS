@@ -189,6 +189,7 @@ type Cache struct {
 	maxSize int
 	hits    atomic.Int64
 	misses  atomic.Int64
+	stopCh  chan struct{}
 }
 
 func New(maxSize int, minTTL uint32) *Cache {
@@ -196,7 +197,7 @@ func New(maxSize int, minTTL uint32) *Cache {
 		maxSize = 10000
 	}
 	perShard := max(1, maxSize/numShards)
-	c := &Cache{maxSize: maxSize, minTTL: minTTL}
+	c := &Cache{maxSize: maxSize, minTTL: minTTL, stopCh: make(chan struct{})}
 	for i := range c.shards {
 		c.shards[i] = newShard(perShard)
 	}
@@ -311,9 +312,9 @@ func (c *Cache) Hot(n int) []HotEntry {
 		n = 20
 	}
 	type scored struct {
-		key     string
-		hits    int64
-		ttl     int64
+		key  string
+		hits int64
+		ttl  int64
 	}
 	all := make([]scored, 0, 256)
 	now := time.Now()
@@ -398,10 +399,23 @@ func (c *Cache) pickShard(k string) *shard {
 func (c *Cache) janitor() {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
-	for range t.C {
-		for i := range c.shards {
-			c.shards[i].purgeExpired()
+	for {
+		select {
+		case <-c.stopCh:
+			return
+		case <-t.C:
+			for i := range c.shards {
+				c.shards[i].purgeExpired()
+			}
 		}
+	}
+}
+
+func (c *Cache) Stop() {
+	select {
+	case <-c.stopCh:
+	default:
+		close(c.stopCh)
 	}
 }
 
@@ -451,11 +465,4 @@ func negativeTTL(msg *dns.Msg) uint32 {
 		}
 	}
 	return 300
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

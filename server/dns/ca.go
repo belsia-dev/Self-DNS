@@ -48,13 +48,22 @@ func loadOrCreateCA(dir string) (*blockPageCA, error) {
 		return nil, err
 	}
 
-	_ = os.MkdirAll(dir, 0o700)
-	_ = os.WriteFile(filepath.Join(dir, caCertFile), ca.CertPEM(), 0o644)
-	keyDER, _ := x509.MarshalECPrivateKey(ca.key)
-	_ = os.WriteFile(filepath.Join(dir, caKeyFile),
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("create CA directory: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, caCertFile), ca.CertPEM(), 0o600); err != nil {
+		return nil, fmt.Errorf("write CA cert: %w", err)
+	}
+	keyDER, err := x509.MarshalECPrivateKey(ca.key)
+	if err != nil {
+		return nil, fmt.Errorf("marshal CA key: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, caKeyFile),
 		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}),
 		0o600,
-	)
+	); err != nil {
+		return nil, fmt.Errorf("write CA key: %w", err)
+	}
 	return ca, nil
 }
 

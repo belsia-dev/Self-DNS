@@ -293,13 +293,13 @@ function ResolutionOrder({ api }) {
   const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async () => {
-    try { setData(await api.get('/network-dns')) } catch {}
+    try { setData(await api.get('/network-dns')) } catch (err) { console.error('[Settings]:', err) }
   }, [api])
   useEffect(() => { load() }, [load])
 
   const refresh = async () => {
     setRefreshing(true)
-    try { await api.post('/network-dns', {}); setTimeout(load, 800) } catch {}
+    try { await api.post('/network-dns', {}); setTimeout(load, 800) } catch (err) { console.error('[Settings]:', err) }
     setRefreshing(false)
   }
 
@@ -447,7 +447,8 @@ function SettingsInner({ api }) {
           lastLivePayloadRef.current = JSON.stringify(blockPagePayload(data))
           lastNetworkBindingRef.current = networkBindingKey(data)
         }
-      } catch {
+      } catch (err) {
+        console.error('[Settings]:', err)
         if (!mounted) return
         attempts++
         setStartMsg(messages[Math.min(attempts - 1, messages.length - 1)])
@@ -528,7 +529,8 @@ function SettingsInner({ api }) {
       setSaveResult('ok')
       lastLivePayloadRef.current = JSON.stringify(blockPagePayload(cfg))
       lastNetworkBindingRef.current = networkBindingKey(cfg)
-    } catch {
+    } catch (err) {
+      console.error('[Settings]:', err)
       setSaveResult('err')
     }
     setSaving(false)

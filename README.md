@@ -1,5 +1,8 @@
 # Self DNS
 
+[![CI](https://github.com/belsia-dev/Self-DNS/actions/workflows/ci.yml/badge.svg)](https://github.com/belsia-dev/Self-DNS/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
 ![Logo](docs/logo.png)
 
 A Self DNS is a DNS server running locally on your computer.

@@ -9,5 +9,12 @@
   "author": {
     "name": "Belsia Dev",
     "email": "admin@sites3.kro.kr"
+  },
+  "info": {
+    "companyName": "Belsia Dev",
+    "productName": "SelfDNS Control Center",
+    "productVersion": "1.0.0",
+    "copyright": "© 2025 Belsia Dev",
+    "comments": "Local DNS resolver"
   }
 }

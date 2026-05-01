@@ -20,7 +20,7 @@ export default function Blocklist({ api }) {
   const [msg, setMsg]             = useState('')
 
   const load = async () => {
-    try { setData(await api.get('/blocklist')) } catch {}
+    try { setData(await api.get('/blocklist')) } catch (err) { console.error('[Blocklist]:', err) }
   }
   useEffect(() => { load() }, [api])
 
@@ -45,7 +45,7 @@ export default function Blocklist({ api }) {
   }
 
   const removeDomain = async d => {
-    try { await api.post('/blocklist/remove', { domain: d }); await load() } catch {}
+    try { await api.post('/blocklist/remove', { domain: d }); await load() } catch (err) { console.error('[Blocklist]:', err) }
   }
 
   const testDom = () => {
@@ -148,6 +148,7 @@ export default function Blocklist({ api }) {
               <input
                 className="input-mono"
                 placeholder="ads.example.com"
+                aria-label="Domain name"
                 value={newDomain}
                 onChange={e => setNewDomain(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addDomain()}
@@ -202,6 +203,7 @@ export default function Blocklist({ api }) {
             <input
               className="input-mono pl-7 w-52 h-7 text-2xs"
               placeholder="search…"
+              aria-label="Search queries"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -222,6 +224,7 @@ export default function Blocklist({ api }) {
                 <span className="text-2xs font-mono text-text-secondary">{d}</span>
                 <button
                   className="text-text-dim hover:text-bad opacity-0 group-hover:opacity-100 transition-all"
+                  aria-label="Remove"
                   onClick={() => removeDomain(d)}
                 >
                   <X size={12} />

@@ -14,7 +14,7 @@ export default function Hosts({ api }) {
   const [msg, setMsg]             = useState('')
 
   const load = async () => {
-    try { setHosts(await api.get('/hosts') ?? []) } catch {}
+    try { setHosts(await api.get('/hosts') ?? []) } catch (err) { console.error('[Hosts]:', err) }
   }
   useEffect(() => { load() }, [api])
 
@@ -31,7 +31,7 @@ export default function Hosts({ api }) {
   }
 
   const remove = async d => {
-    try { await api.post('/hosts/remove', { domain: d }); await load() } catch {}
+    try { await api.post('/hosts/remove', { domain: d }); await load() } catch (err) { console.error('[Hosts]:', err) }
   }
 
   const test = () => {
@@ -81,6 +81,7 @@ export default function Hosts({ api }) {
               <input
                 className="input-mono flex-1"
                 placeholder="myapp.local"
+                aria-label="Domain name"
                 value={domain}
                 onChange={e => setDomain(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && ip && add()}
@@ -89,6 +90,7 @@ export default function Hosts({ api }) {
               <input
                 className="input-mono w-36"
                 placeholder="192.168.1.10"
+                aria-label="IP address"
                 value={ip}
                 onChange={e => setIp(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && domain && add()}
@@ -145,6 +147,7 @@ export default function Hosts({ api }) {
             <input
               className="input-mono pl-7 w-52 h-7 text-2xs"
               placeholder="search…"
+              aria-label="Search queries"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -178,6 +181,7 @@ export default function Hosts({ api }) {
                   <td className="!text-right">
                     <button
                       className="text-text-dim hover:text-bad opacity-0 group-hover:opacity-100 transition-all"
+                      aria-label="Remove"
                       onClick={() => remove(h.domain)}
                     >
                       <Trash2 size={12} />

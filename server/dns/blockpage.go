@@ -59,7 +59,6 @@ var newBlockPageHTTPSServer = func(addr string, handler http.Handler, tlsCfg *tl
 	return &httpServerAdapter{addr: ln.Addr().String(), shutdown: srv.Shutdown}, nil
 }
 
-
 type blockPageState struct {
 	Domain      string `json:"domain"`
 	Host        string `json:"host"`
@@ -187,7 +186,7 @@ func (s *Server) handleBlockPageHTTP(w http.ResponseWriter, r *http.Request) {
   <script>window.SELFDNS_BLOCK_PAGE = %s;</script>
   <script>%s</script>
 </body>
-</html>`, page.CSS, replaceBlockTokens(page.HTML, state), string(payload), page.JS)
+</html>`, sanitizeCSS(page.CSS), replaceBlockTokens(page.HTML, state), string(payload), sanitizeJS(page.JS))
 }
 
 func resolveBlockedIP(cfg *config.Config, localAddr net.Addr, page config.BlockPageConfig, wantIPv6 bool) net.IP {
@@ -338,4 +337,47 @@ func replaceBlockTokens(htmlSnippet string, state blockPageState) string {
 		"{{GENERATED_AT}}", html.EscapeString(state.GeneratedAt),
 	)
 	return replacer.Replace(htmlSnippet)
+}
+
+func sanitizeCSS(s string) string {
+	return stripDangerousTags(s)
+}
+
+func sanitizeJS(s string) string {
+	return stripDangerousTags(s)
+}
+
+func stripDangerousTags(s string) string {
+	patterns := []string{
+		"</style>",
+		"</script>",
+		"<script",
+		"<iframe",
+		"<object",
+		"<embed",
+		"<link",
+	}
+	replaced := s
+	for _, p := range patterns {
+		replaced = stripTagCI(replaced, p)
+	}
+	return replaced
+}
+
+func stripTagCI(s, tag string) string {
+	lower := strings.ToLower(s)
+	lowerTag := strings.ToLower(tag)
+	var b strings.Builder
+	b.Grow(len(s))
+	i := 0
+	for {
+		idx := strings.Index(lower[i:], lowerTag)
+		if idx < 0 {
+			b.WriteString(s[i:])
+			break
+		}
+		b.WriteString(s[i : i+idx])
+		i += idx + len(tag)
+	}
+	return b.String()
 }

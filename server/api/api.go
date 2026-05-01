@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/belsia-dev/Self-DNS/server/blocker"
@@ -16,6 +17,7 @@ import (
 )
 
 type API struct {
+	cfgMu      sync.RWMutex
 	cfg        *config.Config
 	srv        *dns.Server
 	blocker    *blocker.Blocker

@@ -40,7 +40,7 @@ export default function Security({ api }) {
 
   const load = async () => {
     setLoading(true)
-    try { setReport(await api.get('/security')) } catch {}
+    try { setReport(await api.get('/security')) } catch (err) { console.error('[Security]:', err) }
     setLoading(false)
   }
   useEffect(() => { load() }, [api])

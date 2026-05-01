@@ -54,7 +54,7 @@ export default function Dashboard({ api }) {
       try {
         const [s, st] = await Promise.all([api.get('/stats'), api.get('/status')])
         if (alive) { setStats(s); setStatus(st) }
-      } catch {}
+      } catch (err) { console.error('[Dashboard]:', err) }
     }
     poll()
     const id = setInterval(poll, 1000)
@@ -71,7 +71,7 @@ export default function Dashboard({ api }) {
           api.get('/network-dns'),
         ])
         if (alive) { setUpstreams(u ?? []); setHot(h ?? []); setNetDNS(n ?? {}) }
-      } catch {}
+      } catch (err) { console.error('[Dashboard]:', err) }
     }
     poll()
     const id = setInterval(poll, 3000)
@@ -80,7 +80,7 @@ export default function Dashboard({ api }) {
 
   const action = async (path, label) => {
     try { await api.post(path, {}); setToast(`${label} · ok`) }
-    catch { setToast(`${label} · failed`) }
+    catch (err) { console.error('[Dashboard]:', err); setToast(`${label} · failed`) }
     setTimeout(() => setToast(''), 2500)
   }
 
