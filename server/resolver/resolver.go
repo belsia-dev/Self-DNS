@@ -15,14 +15,14 @@ import (
 )
 
 const (
-	dialTimeout     = 2 * time.Second
-	queryTimeout    = 2 * time.Second
-	connMaxAge      = 55 * time.Second
-	maxIdlePer      = 8
-	prefetchEvery   = 45 * time.Second
+	dialTimeout      = 2 * time.Second
+	queryTimeout     = 2 * time.Second
+	connMaxAge       = 55 * time.Second
+	maxIdlePer       = 8
+	prefetchEvery    = 45 * time.Second
 	prefetchHeadroom = 30 * time.Second
-	prefetchTopN    = 20
-	failureCutoff   = 5
+	prefetchTopN     = 20
+	failureCutoff    = 5
 )
 
 type upstreamStat struct {

@@ -59,7 +59,6 @@ var newBlockPageHTTPSServer = func(addr string, handler http.Handler, tlsCfg *tl
 	return &httpServerAdapter{addr: ln.Addr().String(), shutdown: srv.Shutdown}, nil
 }
 
-
 type blockPageState struct {
 	Domain      string `json:"domain"`
 	Host        string `json:"host"`

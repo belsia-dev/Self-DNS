@@ -312,9 +312,9 @@ func (c *Cache) Hot(n int) []HotEntry {
 		n = 20
 	}
 	type scored struct {
-		key     string
-		hits    int64
-		ttl     int64
+		key  string
+		hits int64
+		ttl  int64
 	}
 	all := make([]scored, 0, 256)
 	now := time.Now()
@@ -466,5 +466,3 @@ func negativeTTL(msg *dns.Msg) uint32 {
 	}
 	return 300
 }
-
-
