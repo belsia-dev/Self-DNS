@@ -98,9 +98,9 @@ func TestIsPrivate_EdgeCases(t *testing.T) {
 
 func TestIsLocalDomain(t *testing.T) {
 	tests := []struct {
-		name string
+		name   string
 		domain string
-		want  bool
+		want   bool
 	}{
 		{"local", "myhost.local", true},
 		{"localhost", "myhost.localhost", true},
