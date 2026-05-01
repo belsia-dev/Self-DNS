@@ -187,6 +187,9 @@ func (s *Server) Reload(cfg *config.Config) error {
 	s.Stop()
 	s.mu.Lock()
 	s.cfg = cfg
+	if s.limiter != nil {
+		s.limiter.Stop()
+	}
 	s.limiter = newRateLimiter(cfg.RateLimit)
 	s.mu.Unlock()
 	s.resolver.UpdateConfig(cfg)
@@ -276,13 +279,17 @@ func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
 
 	if ip, ok := lookupHost(hosts, domain); ok {
 		resp := staticHostResponse(req, ip)
-		_ = w.WriteMsg(resp)
+		if err := w.WriteMsg(resp); err != nil {
+			log.Printf("[dns] write response: %v", err)
+		}
 		s.record(domain, qtype, stats.ResultResolved, "", time.Since(start), logQ)
 		return
 	}
 
 	if s.blocker.IsBlocked(domain) {
-		_ = w.WriteMsg(s.blockedResponse(w, req))
+		if err := w.WriteMsg(s.blockedResponse(w, req)); err != nil {
+			log.Printf("[dns] write response: %v", err)
+		}
 		s.record(domain, qtype, stats.ResultBlocked, "", time.Since(start), logQ)
 		return
 	}
@@ -300,7 +307,9 @@ func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
 		result = stats.ResultCached
 	}
 
-	_ = w.WriteMsg(resp)
+	if err := w.WriteMsg(resp); err != nil {
+		log.Printf("[dns] write response: %v", err)
+	}
 	s.record(domain, qtype, result, upstream, latency, logQ)
 }
 

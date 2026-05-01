@@ -62,7 +62,7 @@ export default function Sidebar({ current, onNavigate, running, ready }) {
         <span className="text-2xs font-mono text-text-dim">53</span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 space-y-4">
+      <nav className="flex-1 overflow-y-auto px-2 space-y-4" aria-label="Main navigation">
         {SECTIONS.map(section => (
           <div key={section.label}>
             <p className="px-2.5 mb-1 text-[9.5px] font-semibold uppercase
@@ -75,6 +75,7 @@ export default function Sidebar({ current, onNavigate, running, ready }) {
                 return (
                   <button
                     key={id}
+                    aria-current={active ? 'page' : undefined}
                     onClick={() => onNavigate(id)}
                     className={`group nav-item ${active ? 'nav-item-active' : 'hover:bg-ink-200/60 hover:text-text-primary'}`}
                   >

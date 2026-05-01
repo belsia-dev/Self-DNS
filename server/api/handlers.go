@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -84,13 +85,14 @@ func (a *API) handleBlocklistToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.blocker.Toggle(next)
+	// TODO: Replace full flush with selective invalidation of only blocklist-affected entries.
 	a.cache.Flush()
 	go flushOSDNSCache()
 	if err := a.srv.ApplyBlockPageConfig(cfg); err != nil {
 		serverError(w, err)
 		return
 	}
-	a.cfg = cfg
+	a.setConfig(cfg)
 	jsonOK(w, map[string]any{"enabled": next})
 }
 
@@ -110,7 +112,11 @@ func (a *API) mutateBlocklistDomain(w http.ResponseWriter, r *http.Request, incl
 	var body struct {
 		Domain string `json:"domain"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Domain == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		badRequest(w, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(body.Domain) == "" {
 		badRequest(w, "domain is required")
 		return
 	}
@@ -153,7 +159,7 @@ func (a *API) mutateBlocklistDomain(w http.ResponseWriter, r *http.Request, incl
 		serverError(w, err)
 		return
 	}
-	a.cfg = cfg
+	a.setConfig(cfg)
 	jsonOK(w, map[string]string{"status": status})
 }
 
@@ -187,6 +193,10 @@ func (a *API) handleHostsAdd(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "domain and ip are required")
 		return
 	}
+	if net.ParseIP(body.IP) == nil {
+		badRequest(w, "invalid IP address")
+		return
+	}
 	cfg := a.currentConfig()
 	if cfg.Hosts == nil {
 		cfg.Hosts = make(map[string]string)
@@ -200,7 +210,7 @@ func (a *API) handleHostsAdd(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	a.cfg = cfg
+	a.setConfig(cfg)
 	jsonOK(w, map[string]string{"status": "added"})
 }
 
@@ -226,7 +236,7 @@ func (a *API) handleHostsRemove(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	a.cfg = cfg
+	a.setConfig(cfg)
 	jsonOK(w, map[string]string{"status": "removed"})
 }
 
@@ -267,7 +277,7 @@ func (a *API) handleBlockPageConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.cfg = next
+	a.setConfig(next)
 	jsonOK(w, map[string]any{
 		"status":           "applied",
 		"response_mode":    next.Blocklist.ResponseMode,
@@ -300,7 +310,7 @@ func (a *API) handleConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.blocker.Toggle(cfg.Blocklist.Enabled)
-		a.cfg = &cfg
+		a.setConfig(&cfg)
 		jsonOK(w, map[string]string{"status": "saved and reloaded"})
 	default:
 		methodNotAllowed(w)
@@ -332,7 +342,15 @@ func (a *API) currentConfig() *config.Config {
 	if cfg := a.srv.ConfigClone(); cfg != nil {
 		return cfg
 	}
+	a.cfgMu.RLock()
+	defer a.cfgMu.RUnlock()
 	return config.Clone(a.cfg)
+}
+
+func (a *API) setConfig(cfg *config.Config) {
+	a.cfgMu.Lock()
+	a.cfg = cfg
+	a.cfgMu.Unlock()
 }
 
 func (a *API) handleCacheStats(w http.ResponseWriter, r *http.Request) {

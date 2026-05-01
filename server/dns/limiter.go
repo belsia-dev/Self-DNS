@@ -20,6 +20,7 @@ type rateLimiter struct {
 	ipBuckets     map[string]*tokenBucket
 	domainMaxRPS  float64
 	domainBuckets map[string]*tokenBucket
+	stopCh        chan struct{}
 }
 
 func newRateLimiter(cfg config.RateLimitConfig) *rateLimiter {
@@ -40,6 +41,7 @@ func newRateLimiter(cfg config.RateLimitConfig) *rateLimiter {
 		ipBuckets:     make(map[string]*tokenBucket),
 		domainMaxRPS:  float64(cfg.PerDomainMaxRPS),
 		domainBuckets: make(map[string]*tokenBucket),
+		stopCh:        make(chan struct{}),
 	}
 	go r.cleanup()
 	return r
@@ -91,19 +93,32 @@ func (r *rateLimiter) consumeToken(buckets map[string]*tokenBucket, key string, 
 func (r *rateLimiter) cleanup() {
 	t := time.NewTicker(5 * time.Minute)
 	defer t.Stop()
-	for range t.C {
-		cutoff := time.Now().Add(-5 * time.Minute)
-		r.mu.Lock()
-		for ip, b := range r.ipBuckets {
-			if b.lastRefill.Before(cutoff) {
-				delete(r.ipBuckets, ip)
+	for {
+		select {
+		case <-r.stopCh:
+			return
+		case <-t.C:
+			cutoff := time.Now().Add(-5 * time.Minute)
+			r.mu.Lock()
+			for ip, b := range r.ipBuckets {
+				if b.lastRefill.Before(cutoff) {
+					delete(r.ipBuckets, ip)
+				}
 			}
-		}
-		for dom, b := range r.domainBuckets {
-			if b.lastRefill.Before(cutoff) {
-				delete(r.domainBuckets, dom)
+			for dom, b := range r.domainBuckets {
+				if b.lastRefill.Before(cutoff) {
+					delete(r.domainBuckets, dom)
+				}
 			}
+			r.mu.Unlock()
 		}
-		r.mu.Unlock()
+	}
+}
+
+func (r *rateLimiter) Stop() {
+	select {
+	case <-r.stopCh:
+	default:
+		close(r.stopCh)
 	}
 }

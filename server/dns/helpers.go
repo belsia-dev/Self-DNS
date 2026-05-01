@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"log"
 	"net"
 	"strings"
 
@@ -13,7 +14,9 @@ const (
 )
 
 func writeRcode(w dns.ResponseWriter, req *dns.Msg, rcode int) {
-	_ = w.WriteMsg(rcodeResponse(req, rcode))
+	if err := w.WriteMsg(rcodeResponse(req, rcode)); err != nil {
+		log.Printf("[dns] write response: %v", err)
+	}
 }
 
 func rcodeResponse(req *dns.Msg, rcode int) *dns.Msg {

@@ -7,13 +7,15 @@ dnssec: true
 service_mode: local
 upstream:
     - 1.1.1.1:853
+    - 8.8.8.8:853
+    - 9.9.9.9:853
 cache:
     enabled: true
     max_size: 10000
     min_ttl: 60
     stale_while_revalidate: true
 rate_limit:
-    enabled: false
+    enabled: true
     max_rps: 10
     burst_multiplier: 3
     whitelist_ips: []

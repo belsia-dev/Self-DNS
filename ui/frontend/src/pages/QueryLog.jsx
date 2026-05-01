@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Pause, Play, Download, Search, X } from 'lucide-react'
 
+const csvEscape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"'
+
 const CHIP = {
   RESOLVED: 'chip-good',
   CACHED:   'chip-violet',
@@ -34,10 +36,10 @@ export default function QueryLog({ api }) {
       try {
         const data = await api.get('/queries')
         setQueries(data ?? [])
-      } catch {}
+      } catch (err) { console.error('[QueryLog]:', err) }
     }
     poll()
-    const id = setInterval(poll, 500)
+    const id = setInterval(poll, 2000)
     return () => clearInterval(id)
   }, [api])
 
@@ -56,7 +58,8 @@ export default function QueryLog({ api }) {
   const exportCSV = () => {
     const header = 'Timestamp,Domain,Type,Result,Latency(ms),Upstream\n'
     const rows = visible.map(q =>
-      `${q.timestamp},${q.domain},${q.type},${q.result},${q.latency_ms.toFixed(2)},${q.upstream}`
+      [q.timestamp, q.domain, q.type, q.result, q.latency_ms.toFixed(2), q.upstream]
+        .map(csvEscape).join(',')
     ).join('\n')
     const blob = new Blob([header + rows], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -73,7 +76,7 @@ export default function QueryLog({ api }) {
           <p className="mt-1 text-xs text-text-muted">
             <span className="font-mono">{visible.length}</span> shown
             <span className="mx-2 text-text-dim">·</span>
-            <span className="font-mono">live · 500ms</span>
+            <span className="font-mono">live · 2s</span>
           </p>
         </div>
 
@@ -98,6 +101,7 @@ export default function QueryLog({ api }) {
           <input
             className="input pl-7 h-9"
             placeholder="filter by domain…"
+            aria-label="Search queries"
             value={filter}
             onChange={e => setFilter(e.target.value)}
           />
@@ -115,6 +119,7 @@ export default function QueryLog({ api }) {
           {FILTERS.map(t => (
             <button
               key={t}
+              aria-pressed={typeFilter === t}
               onClick={() => setTypeFilter(t)}
               className={`px-2 h-6 rounded text-2xs font-semibold uppercase tracking-widest transition-colors
                           ${typeFilter === t
@@ -156,7 +161,7 @@ export default function QueryLog({ api }) {
                   : lat < 80 ? 'text-warn'
                   : 'text-bad'
                 return (
-                  <tr key={i}>
+                  <tr key={q.timestamp + '-' + q.domain}>
                     <td className="font-mono text-text-muted">{ts(q.timestamp)}</td>
                     <td className="font-mono text-text-primary truncate max-w-[280px]">
                       {q.domain}

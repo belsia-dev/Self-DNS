@@ -260,9 +260,26 @@ func (s *Stats) Queries(n int) []QueryEntry {
 	s.queryLogMu.RLock()
 	defer s.queryLogMu.RUnlock()
 
-	log := make([]QueryEntry, len(s.queryLog))
-	copy(log, s.queryLog)
+	if s.queryLogPos == 0 {
+		// Not wrapped yet — queryLog contains only the used portion.
+		log := make([]QueryEntry, len(s.queryLog))
+		copy(log, s.queryLog)
+		for i, j := 0, len(log)-1; i < j; i, j = i+1, j-1 {
+			log[i], log[j] = log[j], log[i]
+		}
+		if n > 0 && len(log) > n {
+			log = log[:n]
+		}
+		return log
+	}
 
+	// Wrapped ring buffer: oldest entry is at pos%max.
+	pos := s.queryLogPos % maxQueryLog
+	log := make([]QueryEntry, 0, maxQueryLog)
+	log = append(log, s.queryLog[pos:]...)
+	log = append(log, s.queryLog[:pos]...)
+
+	// Reverse so newest is first.
 	for i, j := 0, len(log)-1; i < j; i, j = i+1, j-1 {
 		log[i], log[j] = log[j], log[i]
 	}

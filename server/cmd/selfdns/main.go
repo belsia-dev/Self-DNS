@@ -68,6 +68,7 @@ func main() {
 	log.Println("Shutting down gracefully…")
 	apiSrv.Stop()
 	srv.Stop()
+	res.Stop()
 	log.Println("SelfDNS stopped.")
 }
 

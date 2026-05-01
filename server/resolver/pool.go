@@ -21,6 +21,7 @@ type dotPool struct {
 	sessions tls.ClientSessionCache
 	mu       sync.Mutex
 	idle     map[string][]*pooledConn
+	stopCh   chan struct{}
 }
 
 func newDotPool(tlsCfg *tls.Config) *dotPool {
@@ -30,6 +31,7 @@ func newDotPool(tlsCfg *tls.Config) *dotPool {
 		tlsCfg:   cfg,
 		sessions: cfg.ClientSessionCache,
 		idle:     make(map[string][]*pooledConn),
+		stopCh:   make(chan struct{}),
 	}
 	go p.janitor()
 	return p
@@ -111,19 +113,32 @@ func (p *dotPool) dial(server string) (*pooledConn, error) {
 func (p *dotPool) janitor() {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
-	for range t.C {
-		p.mu.Lock()
-		for server, stack := range p.idle {
-			alive := stack[:0]
-			for _, pc := range stack {
-				if time.Since(pc.created) < connMaxAge {
-					alive = append(alive, pc)
-				} else {
-					_ = pc.conn.Close()
+	for {
+		select {
+		case <-p.stopCh:
+			return
+		case <-t.C:
+			p.mu.Lock()
+			for server, stack := range p.idle {
+				alive := stack[:0]
+				for _, pc := range stack {
+					if time.Since(pc.created) < connMaxAge {
+						alive = append(alive, pc)
+					} else {
+						_ = pc.conn.Close()
+					}
 				}
+				p.idle[server] = alive
 			}
-			p.idle[server] = alive
+			p.mu.Unlock()
 		}
-		p.mu.Unlock()
+	}
+}
+
+func (p *dotPool) Stop() {
+	select {
+	case <-p.stopCh:
+	default:
+		close(p.stopCh)
 	}
 }

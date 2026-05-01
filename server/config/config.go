@@ -170,6 +170,11 @@ func validate(cfg *Config) error {
 	if len(cfg.Upstream) == 0 {
 		return fmt.Errorf("at least one upstream DNS server is required")
 	}
+	for i, upstream := range cfg.Upstream {
+		if _, _, err := net.SplitHostPort(upstream); err != nil {
+			return fmt.Errorf("upstream[%d] %q is not a valid host:port: %w", i, upstream, err)
+		}
+	}
 	if cfg.Blocklist.ResponseMode != ResponseModeNXDomain && cfg.Blocklist.ResponseMode != ResponseModeBlockPage {
 		return fmt.Errorf("blocklist.response_mode must be one of: %s, %s", ResponseModeNXDomain, ResponseModeBlockPage)
 	}
@@ -207,6 +212,25 @@ func validate(cfg *Config) error {
 		parsed := net.ParseIP(ip)
 		if parsed == nil || parsed.To4() != nil {
 			return fmt.Errorf("blocklist.block_page.ipv6 must be a valid IPv6 address")
+		}
+	}
+	for domain, ip := range cfg.Hosts {
+		if strings.TrimSpace(domain) == "" {
+			return fmt.Errorf("hosts entry has empty domain")
+		}
+		if net.ParseIP(ip) == nil {
+			return fmt.Errorf("hosts[%q] has invalid IP address %q", domain, ip)
+		}
+	}
+	for _, entry := range cfg.RateLimit.WhitelistIPs {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if net.ParseIP(entry) == nil {
+			if _, _, err := net.ParseCIDR(entry); err != nil {
+				return fmt.Errorf("rate_limit.whitelist_ips entry %q is not a valid IP or CIDR", entry)
+			}
 		}
 	}
 	return nil

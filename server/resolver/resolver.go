@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/belsia-dev/Self-DNS/server/cache"
@@ -176,6 +177,9 @@ func (r *Resolver) Stop() {
 	default:
 		close(r.stop)
 	}
+	if r.dotPool != nil {
+		r.dotPool.Stop()
+	}
 }
 
 func (r *Resolver) sortedUpstreams(upstreams []string) []string {
@@ -188,7 +192,7 @@ func (r *Resolver) sortedUpstreams(upstreams []string) []string {
 	for _, s := range upstreams {
 		v, _ := r.health.LoadOrStore(s, &upstreamStat{})
 		st := v.(*upstreamStat)
-		all = append(all, scored{srv: s, ema: st.emaMicro, fail: st.failStreak})
+		all = append(all, scored{srv: s, ema: atomic.LoadInt64(&st.emaMicro), fail: atomic.LoadInt64(&st.failStreak)})
 	}
 	sort.Slice(all, func(i, j int) bool {
 		if all[i].fail != all[j].fail {
@@ -231,8 +235,8 @@ func (r *Resolver) UpstreamsHealth() []UpstreamHealth {
 		var fail int64
 		if v, ok := r.health.Load(s); ok {
 			st := v.(*upstreamStat)
-			avg = float64(st.emaMicro) / 1000.0
-			fail = st.failStreak
+			avg = float64(atomic.LoadInt64(&st.emaMicro)) / 1000.0
+			fail = atomic.LoadInt64(&st.failStreak)
 		}
 		out = append(out, UpstreamHealth{Server: s, AvgMs: avg, FailStreak: fail})
 	}
